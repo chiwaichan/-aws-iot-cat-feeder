@@ -90,10 +90,6 @@ The diagram above depicts the components used to send a message to the ESP32 eac
 4. **AWS IoT Core**: This is the service that will forward message to the ESP32 micro-controller that are subscribed to Topics.
 5. **ESP32**: We will see details of the button event from each click in the Arduino console once this part is set up.
 
-![Distraction](https://raw.githubusercontent.com/chiwaichan/blog-assets/main/images/smart-cat-feeder-part-2/distraction.jpeg)
-
-Some peer architecture diagramming/rolling on the keyboard constantly
-
 ## **Instructions to set up the AWS IoT button part of the solution**
 
 1. Take the 3 files create in the second set of Certificate created in the AWS IoT Core Service in the prerequisites, then create 3 AWS Secrets Manager "Other type of secret: Plaintext" values. We need a Secret value for each file. This is to provide the Lambda Function the Certificate to call AWS IoT Core.
