@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Smart Cat Feeder serverless-stack
+
+Globals:
+  Function:
+    Timeout: 10
+
+Parameters:
+  IoTEndpoint:
+    Type: String
+
+  CatFeederThingLambdaName:
+    Type: String
+    Default: CatFeederThingLambda
+
+  CatFeederThingLambdaCertName:
+    Type: String
+
+  CatFeederThingLambdaActionTopicName:
+    Type: String
+    Default: cat-feeder/action
+
+  CatFeederThingLambdaSecretNameCertCA:
+    Type: String
+
+  CatFeederThingLambdaSecretNameCertCRT:
+    Type: String
+
+  CatFeederThingLambdaSecretNameCertPrivate:
+    Type: String
+
+
+    
+  CatFeederThingControllerName:
+    Type: String
+    Default: CatFeederThingESP32
+
+  CatFeederThingControllerCertName:
+    Type: String
+
+  CatFeederThingControllerStatesTopicName:
+    Type: String
+    Default: cat-feeder/states
+
+Resources:
+  CatFeederThingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: cat_feeder_function
+      Handler: thing/app.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt PublishToESP32ThingExecutionRole.Arn
+      Environment:
+        Variables:
+          Topic: !Ref CatFeederThingLambdaActionTopicName
+          ThingName: !Ref CatFeederThingLambdaName
+          IoTEndpoint: !Ref IoTEndpoint
+
+  PublishToESP32ThingExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: SecretsManager
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - secretsmanager:GetResourcePolicy
+            - secretsmanager:GetSecretValue
+            - secretsmanager:DescribeSecret
+            - secretsmanager:ListSecretVersionIds
+            Resource: 
+            - !Sub
+              - arn:aws:secretsmanager:${Region}:${AccountID}:secret:${CatFeederThingLambdaSecretNameCertCA}
+              - {Region: !Ref AWS::Region, AccountID: !Ref AWS::AccountId, CatFeederThingLambdaSecretNameCertCA: !Ref CatFeederThingLambdaSecretNameCertCA}
+            - !Sub
+              - arn:aws:secretsmanager:${Region}:${AccountID}:secret:${CatFeederThingLambdaSecretNameCertCRT}
+              - {Region: !Ref AWS::Region, AccountID: !Ref AWS::AccountId, CatFeederThingLambdaSecretNameCertCRT: !Ref CatFeederThingLambdaSecretNameCertCRT}
+            - !Sub
+              - arn:aws:secretsmanager:${Region}:${AccountID}:secret:${CatFeederThingLambdaSecretNameCertPrivate}
+              - {Region: !Ref AWS::Region, AccountID: !Ref AWS::AccountId, CatFeederThingLambdaSecretNameCertPrivate: !Ref CatFeederThingLambdaSecretNameCertPrivate}
+      - PolicyName: Logging
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+
+
+  CatFeederThingLambda:
+    Type: AWS::IoT::Thing
+    Properties:
+      ThingName:
+        Ref: CatFeederThingLambdaName
+      AttributePayload:
+        Attributes:
+          thingType: lambda
+
+  CatFeederThingLambdaPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - iot:Connect
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${CatFeederThingLambdaName}'
+        - Effect: Allow
+          Action:
+          - iot:Publish
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/${CatFeederThingLambdaActionTopicName}'
+      PolicyName: 
+        Ref: CatFeederThingLambdaName
+
+  CatFeederThingLambdaPrincipalAttachment:
+    DependsOn: CatFeederThingLambdaPolicy
+    Type: AWS::IoT::PolicyPrincipalAttachment
+    Properties:
+      PolicyName:
+        Ref: CatFeederThingLambdaName
+      Principal: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:cert/${CatFeederThingLambdaCertName}'
+
+
+
+  CatFeederThingController:
+    Type: AWS::IoT::Thing
+    Properties:
+      ThingName:
+        Ref: CatFeederThingControllerName
+      AttributePayload:
+        Attributes:
+          thingType: sparkfun-esp32
+
+  CatFeederThingControllerPolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - iot:Connect
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${CatFeederThingControllerName}'
+        - Effect: Allow
+          Action:
+          - iot:Subscribe
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/${CatFeederThingLambdaActionTopicName}'
+        - Effect: Allow
+          Action:
+          - iot:Receive
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/${CatFeederThingLambdaActionTopicName}'
+        - Effect: Allow
+          Action:
+          - iot:Publish
+          Resource:
+          - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/${CatFeederThingControllerStatesTopicName}'
+      PolicyName: 
+        Ref: CatFeederThingControllerName
+
+  CatFeederThingControllerPrincipalAttachment:
+    DependsOn: CatFeederThingControllerPolicy
+    Type: AWS::IoT::PolicyPrincipalAttachment
+    Properties:
+      PolicyName:
+        Ref: CatFeederThingControllerName
+      Principal: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:cert/${CatFeederThingControllerCertName}'
+
+
+Outputs:
+  CatFeederThingFunction:
+    Description: "Cat Feeder Thing Lambda Function ARN"
+    Value: !GetAtt CatFeederThingFunction.Arn
+
