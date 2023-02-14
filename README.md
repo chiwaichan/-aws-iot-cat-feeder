@@ -1,5 +1,5 @@
 # Welcome
-I am in the process of figuring out how to build an IoT Cat Feeder from scratch; at the same I will be documenting my journey as I figure everything out from Arduino ESP32 micro-controllers, 3D Printing to figuring out how to use Blender (the 3D modeling software): https://www.chiwaichan.co.nz/2021/10/16/smart-cat-feeder-part-2/. This Github repository is intended to share the source code of the entire solution so you can build your own cat feeder.
+I am in the process of figuring out how to build an IoT Cat Feeder from scratch; at the same I will be documenting my journey as I figure everything out from Arduino ESP32 micro-controllers, 3D Printing to figuring out how to use Blender (the 3D modeling software): https://www.chiwaichan.co.nz/2021/11/04/smart-cat-feeder-part-2/. This Github repository is intended to share the source code of the entire solution so you can build your own cat feeder.
 
 In the end I decided to go with the [Seeed Studio XIAO ESP32C3](https://www.seeedstudio.com/Seeed-XIAO-ESP32C3-p-5431.html) implementation of the ESP32 micro-controller for $4.99 (USD). I also ordered some other bits and pieces from AliExpress that's going to take some time to arrive.
 
