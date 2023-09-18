@@ -11,54 +11,83 @@
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(256);
 
-int motor1pin1 = 32;
-int motor1pin2 = 33;
-int motor2pin1 = 16;
-int motor2pin2 = 17;
+int motor1pin1 = D3;
+int motor1pin2 = D4;
+int motor2pin1 = D5;
+int motor2pin2 = D6;
+int ledGreen = D7;
+int ledRed = D8;
+int ledBlue = D9;
+
+// Global variable to store MQTT message
+String receivedMessage;
+
+void blinkLed(int led, int number_of_blinks, int blink_delay = 200) {
+  for (int i = 0; i < number_of_blinks; i++) {
+    digitalWrite(led, HIGH);
+    delay(blink_delay);
+    digitalWrite(led, LOW);
+    delay(blink_delay);
+  }
+}
+
+void confirmWifi() {
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print("Wifi Connect Attempt => SSID: \"");
+    Serial.print(WIFI_SSID);
+    Serial.print("\" Passowrd: \"");
+    // Serial.print(WIFI_PASSWORD);
+    Serial.print("*****");
+    Serial.print("\"\n");
+
+    blinkLed(ledGreen, 3);
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    delay(2000);
+  }
+
+  digitalWrite(ledGreen, HIGH);
+}
 
 void connectAWS()
 {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  Serial.println("Connecting to Wi-Fi");
-  Serial.println(AWS_IOT_ENDPOINT);
-
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  // Configure WiFiClientSecure to use the AWS IoT device credentials
-  net.setCACert(AWS_CERT_CA);
-  net.setCertificate(AWS_CERT_CRT);
-  net.setPrivateKey(AWS_CERT_PRIVATE);
-
-  // Connect to the MQTT broker on the AWS endpoint we defined earlier
-  client.begin(AWS_IOT_ENDPOINT, 8883, net);
-
-  // Create a message handler
-  client.onMessage(messageHandler);
-
-  Serial.println("Connecting to AWS IOT");
-  Serial.println(THINGNAME);
+  Serial.print("Connecting to AWS IOT using \"");
+  Serial.print(AWS_IOT_ENDPOINT);
+  Serial.print("\" endpoint as \"");
+  Serial.print(THINGNAME);
+  Serial.print("\"\n");
 
   while (!client.connect(THINGNAME)) {
-    Serial.print(".");
-    delay(100);
+    confirmWifi();
+
+    Serial.print("AWS IoT Connect Attempt\n");
+    if (client.lastError() != 0 ) {
+      Serial.print("Last Error Code: ");
+      Serial.print(client.lastError());
+      Serial.print("\n");
+    }  
+
+    blinkLed(ledGreen, 5);
   }
 
-  if (!client.connected()) {
-    Serial.println("AWS IoT Timeout!");
-    return;
-  }
+  // if (!client.connected()) {
+  //   Serial.println("AWS IoT Timeout!");
+  //   digitalWrite(ledGreen, LOW);
+  //   digitalWrite(ledRed, HIGH);
+  //   return;
+  // }
 
-  Serial.println("About to subscribe");
+  Serial.print("About to subscribe to \"");
+  Serial.print(AWS_IOT_SUBSCRIBE_TOPIC);
+  Serial.print("\"\n");
+
   // Subscribe to a topic
   client.subscribe(AWS_IOT_SUBSCRIBE_TOPIC);
 
-  Serial.println("AWS IoT Connected!");
+  Serial.println("AWS IoT Fully Connected!");
+  digitalWrite(ledGreen, HIGH);
 }
 
 void publishMessage()
@@ -76,29 +105,48 @@ void publishMessage()
 }
 
 void messageHandler(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
+  Serial.println("Incoming Message - topic: \"" + topic + "\" payload: \"" + payload + "\"");
 
   StaticJsonDocument<200> doc;
   deserializeJson(doc, payload);
   const char* event = doc["event"];
 
-  Serial.println(event);
-
-  feedMe(event);  
+  receivedMessage = event;  
 }
 
 void setup() {
-  Serial.begin(9600);
-  connectAWS();
+  Serial.print("Starting Setup!!!");
 
+  Serial.begin(9600);
   pinMode(motor1pin1, OUTPUT);
   pinMode(motor1pin2, OUTPUT);
   pinMode(motor2pin1, OUTPUT);
   pinMode(motor2pin2, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+  pinMode(ledBlue, OUTPUT);
+  pinMode(ledRed, OUTPUT);
+
+  // blinkLed(ledRed);
+  // blinkLed(ledGreen);
+
+  // Configure WiFiClientSecure to use the AWS IoT device credentials
+  net.setCACert(AWS_CERT_CA);
+  net.setCertificate(AWS_CERT_CRT);
+  net.setPrivateKey(AWS_CERT_PRIVATE);
+
+  // Connect to the MQTT broker on the AWS endpoint we defined earlier
+  client.begin(AWS_IOT_ENDPOINT, 8883, net);
+
+  // Create a message handler
+  client.onMessage(messageHandler);
+  
+  connectAWS();
+
+  Serial.print("Finished Setup!!!");
 }
 
 void feedMe(String event) {
-  Serial.println(event);
+  Serial.println("feedMe Event: " + event);
   
   bool feedLeft = false;
   bool feedRight = false;
@@ -115,15 +163,17 @@ void feedMe(String event) {
   }
 
   if (feedLeft) {
-    Serial.println("run left");
-    digitalWrite(motor1pin1, HIGH);
-    digitalWrite(motor1pin2, LOW);
+    Serial.println("Feeding Left Side");
+    digitalWrite(motor2pin1, HIGH);
+    digitalWrite(motor2pin2, LOW);
+    digitalWrite(ledBlue, HIGH);
   }
 
   if (feedRight) {
-    Serial.println("run right");
-    digitalWrite(motor2pin1, HIGH);
-    digitalWrite(motor2pin2, LOW);
+    Serial.println("Feeding Right Side");
+    digitalWrite(motor1pin1, HIGH);
+    digitalWrite(motor1pin2, LOW);
+    digitalWrite(ledRed, HIGH);
   }
 
   delay(10000);
@@ -131,13 +181,28 @@ void feedMe(String event) {
   digitalWrite(motor1pin2, LOW);
   digitalWrite(motor2pin1, LOW);
   digitalWrite(motor2pin2, LOW);
+  digitalWrite(ledBlue, LOW);
+  digitalWrite(ledRed, LOW);
   delay(2000);
 
-  Serial.println("fed");
+  Serial.println("Feed Complete");
 }
 
 void loop() {
-  publishMessage();
   client.loop();
-  delay(3000);
+  delay(10); // <- fixes some issues with WiFi stability
+  
+  if (!client.connected()) {
+    digitalWrite(ledGreen, LOW);
+    connectAWS();
+  }
+  
+  if (!receivedMessage.isEmpty()) {
+    Serial.print("Received message: ");
+    Serial.println(receivedMessage);
+
+    feedMe(receivedMessage);
+
+    receivedMessage = "";
+  }
 }
